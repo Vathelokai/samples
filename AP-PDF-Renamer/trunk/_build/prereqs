@@ -1,0 +1,23 @@
+do{ my $x = {
+       'conflicts' => {},
+       'requires' => {
+                       'AP::Logger::Role' => 0,
+                       'Moose' => 0,
+                       'DateTime' => 0,
+                       'Try::Tiny' => 0,
+                       'Text::Diff' => 0,
+                       'Test::More' => 0,
+                       'Path::Class' => 0,
+                       'File::Slurp' => 0,
+                       'AP::Locatorable' => 0,
+                       'MIME::Lite' => 0
+                     },
+       'test_requires' => {},
+       'build_requires' => {
+                             'Text::Diff' => 0,
+                             'Test::More' => 0,
+                             'AP::PDF::Renamer' => 0
+                           },
+       'recommends' => {}
+     };
+$x; }

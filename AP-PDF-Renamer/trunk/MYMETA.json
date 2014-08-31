@@ -1,0 +1,47 @@
+{
+   "abstract" : "file delivery tool",
+   "author" : [
+      "Joseph Henderson <jhenderson@allenpress.com>"
+   ],
+   "dynamic_config" : 0,
+   "generated_by" : "Module::Build version 0.4205",
+   "license" : [
+      "restricted"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "AP-PDF-Renamer",
+   "prereqs" : {
+      "build" : {
+         "requires" : {
+            "AP::PDF::Renamer" : "0",
+            "Test::More" : "0",
+            "Text::Diff" : "0"
+         }
+      },
+      "runtime" : {
+         "requires" : {
+            "AP::Locatorable" : "0",
+            "AP::Logger::Role" : "0",
+            "DateTime" : "0",
+            "File::Slurp" : "0",
+            "MIME::Lite" : "0",
+            "Moose" : "0",
+            "Path::Class" : "0",
+            "Test::More" : "0",
+            "Text::Diff" : "0",
+            "Try::Tiny" : "0"
+         }
+      }
+   },
+   "provides" : {
+      "AP::PDF::Renamer" : {
+         "file" : "lib/AP/PDF/Renamer.pm",
+         "version" : "v0.1.3"
+      }
+   },
+   "release_status" : "stable",
+   "version" : "v0.1.3"
+}

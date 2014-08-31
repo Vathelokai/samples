@@ -1,0 +1,147 @@
+﻿[[Category:To copy]] [[Category:AppDev:Uncategorized]]
+==Overview==
+This is a tool to rename pdfs on the file server.  It is used by File Distribution.
+
+Currently, this tool lives on FV1 and modifies files on XINET.
+
+Paradox drops a tsv instruction file, which is read by this module.
+
+This module finds the listed files on Xinet/production. The file is moved to the appropriate _sent folder. A copy with the new name is placed in the FV1 server working folder.
+
+This module is designed to run on the FV1 server. That server has a crontab entry that ensures this module runs continuously. That entry triggers a BASH script which monitors the trigger's file folder every few seconds. In the event of failure, the crontab restarts the BASH script.
+
+This module makes extensive use of AP Logger. When debugging, take advantage of the output by changing the destination value.
+
+As part of normal process, an activity log is generated and maintained each day. The path to the log folder is set in AP Locator.  It is currently \\fv1\pdf_renamer\logs
+
+As part of normal process, any job that sets $self->{success} == 'false' will generate an error log. The log will be saved in the log folder and will also be emailed to the system administrator listed in AP Locator.
+
+Logs older than 30 days are automatically pruned.
+
+==Usage==
+File prep uses Paradox to drop triggers.  From the "1XO Email" screen, there is a button which triggers the process (see Action, below).
+
+The file prep operator retrieves renamed files from //smb_shares/pdf_renamer/ (aka, \\fv1\pdf_renamer\).
+
+==How-to Update==
+# Update your SVN checkout and go to \online_dev\ap-pdf-renamer\trunk
+# Under \lib\ap\pdf, modify the Renamer.pm.  Usually this is just modifying _determine_output_file_names() to change the format or add a new journal.
+# Under \t, modify the appropriate test.  Usually this is just adding a test to 08_determine_output_file_names.t.
+# Test and commit the new code to SVN.
+# Check Jenkins to see that the code builds properly: http://trac.allenpress.net:8080/
+# Log into the FV1 server.  PuTTY is the recommended tool for remoting in. Credentials can be found in the https://clipperz.allenpress.net 'developer' account.
+# Use CPAN to update the AP-PDF-Renamer perl module.
+
+==Implementation==
+The module lives in SVN at ...
+  svn://v-trac.allenpress.net/online_dev/AP-PDF-Renamer/trunk
+
+The dev and live runtime parameters live in the AP Locator service at ...
+  Live: http://locator.allenpress.net/applications/36/settings
+  Dev:  http://locator.dev.allenpress.net/applications/46/settings
+
+The local folders that the servers uses for logs, triggers, and shares are at...
+  network share:
+      \\fv1\pdf_reanamer\
+  locally:
+      /smb_shares/pdf_renamer/
+  specifically:
+      /smb_shares/pdf_renamer/file_out/
+      /smb_shares/pdf_renamer/logs/
+      /smb_shares/pdf_renamer/trigger_in/
+      /smb_shares/pdf_renamer/trigger_out/
+
+Files are picked up and delivered to a Xinet paths, such as...
+  \\xinet\production\t\test\live_jobs\test-00-00\_proofs\first
+  \\xinet\production\t\test\live_jobs\test-00-00\_proofs\first\_sent
+  \\xinet\production\t\test\live_jobs\test-00-00\_proofs\revisions
+  \\xinet\production\t\test\live_jobs\test-00-00\_proofs\revisions\_sent
+
+On the FV1 server, the following crontab file is set up ...
+  /etc/crontab
+      # FILE PREP PDF RENAMER
+      * * * * * root bash /bin/pdf-renamer-bash-cron.sh > /dev/null 2>&1
+
+on the FV1 server, the following BASH scripts are set up in /bin/ ...
+  pdf-renamer-bash-cron.sh
+      If the daemon script below is not running, start it.
+  pdf-renamer-bash-daemon.sh
+      Each 5 seconds, activate the module's bin script
+
+The module has a /bin/ script to activate the process at
+  /usr/local/bin/ap-pdf-renamer.pl
+
+The FV1 server mounts Xinet.  Details are in /etc/fstab
+  source: //xinet.allenpress.net/Production/
+  local name: /net/xinet/Production/
+  login credentials: fastrack
+
+The module is intended to be run 'live' on the fv1.allenpress.net server.  There are a few hard coded elements, such as email text.  Porting to a different server should be straightforward.
+
+==Action==
+In Paradox, in the "1XO Email" screen, there is a button which triggers everything.  It generates a tab separated value file with details about a job to be renamed.  Paradox saves the file to the /trigger_in/ folder.
+
+The pdf-renamer-bash-daemon monitors /trigger_in/ for new instructions. It activates the modules /bin/ script every 5 seconds.  The crontab and pdf-renamer-bash-cron script ensure that the daemon is always running.
+
+The module's /bin/ script instantiates a new object and executes the module.
+
+The module checks for valid input.  If there is none, it ends without log or error.  If input is found, it processes it.
+
+The data from the Paradox TSV file is used to generate file names and paths.  Supplemental data from AP Locator is also used to generate paths.
+
+The module makes a copy of the input file in the shared /smb_shares/pdf_reanamer/file_out/ folder.  It moves the orig. input in xinet to the relative /_sent/ folder.  The module then writes an activity log and ends.
+
+In the event of an error in the module, an error log file is written and emailed based on settings in the AP Locator service.
+
+==History==
+The script and working folders for this tool used to live at //xinet/production/_convert/pdf_rename/.  It was originally written by Dave Dehetre in 2007. It was revised on a few occasions.  A copy of that script is in the /orig/ folder for the module on SVN.
+
+The current version is a full rewrite in early 2014 by Joe Henderson.
+
+It was intended that the module would run on v-presto, but due to module requirements, it was placed on fv1.
+
+ODNT was added to list 23 May 2014.
+
+==Current Problems==
+There seems to be a bug in File::Copy for Perl v5.10.  When the destination file name has extra periods in it (e.g., "test-00-01-02_1..13.pdf"). Have not found solution.  As a work around, the periods are being replaced with underscores.  The effects only a few journals.
+
+The copy() function has problems with manually created folders on xinet.  This is due to non-standard permission setups.  Brett has verified that the templates are set up correctly and that the fastrack user account has the access it needs.  In the event of bizarre failure (cannot cut paste; file not found errors after opening file), check permissions.
+
+When installing, there is a problem with readdir and closedir functions in perl.  CPAN cannot find the t/logs/ folders at first, but then installs.  This does not interrupt the live work of the module though.  If installed manually, this doesn't happen (presumably because the folder paths are local to the install directory).
+
+Module sets the logger string output to true by directly modifying $self.  It seems the AP::Logger method does not work correctly.  This is a hack until Logger can be tweaked.
+
+==To-Do and Feature Requests==
+Implement Moose object system.  Need to re-align the $self hashref, and add an object definition to calling scripts.
+
+Append revision cycle number to file names.  Will need revision info from paradox to do this.  Effects high volume jobs like ARVO and AAA.
+
+The module/script runs every 5 seconds (hot folder style).  the _import_triggers method handles the lack of triggers.   the calling sub (execute) then checks for "no triggers found", and returns. Seems like there's a better way to handle that.  Maybe a method to test up front for existence of a trigger file.
+
+The run_mode check at the beginning should be it's own method.
+
+Debug file paths should be added to _get_paths method instead of being generating within _debug_handler.
+
+Update success variable from string to boolean.
+
+In locator, file_source_base_path does not end with slash, but all other paths end with slash.  Update code to not include slash, so that locator variables can be standardized.
+
+no method tests for ...
+* _import_triggers
+* _prune_logs
+* _determine_input_file_names
+* _deliver_renamed_file
+* _clean_up
+* _error_handler
+... since these all need to write a test file to the t/file_in/ area and act on them.  Don't feel that's necessary right now, since the end-to-end test covers those.
+
+in _cleanup_triggers, chomp was not working as expected.  Used some regex in the mean time.
+
+Error handler only looks at the first job listed in $self.  The error log shows all jobs though.  Email title may not have correct job title.  Need to update error handler to cycle through jobs (needs a success value for each job, instead of the global one).  Alternately, could have the whole module do one job at a time.  Either way, it's a substantial update.
+
+FV1 uses GMT for timezone, so timestamps in log files and file names are not localized.
+
+The Error logs that are emailed out sometimes ahve the logs within the dumped $self, and sometimes they do not.  Should get that standardized.
+
+
+[[Category:AppDev:Needs categories]]

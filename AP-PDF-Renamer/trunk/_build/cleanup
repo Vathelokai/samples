@@ -1,0 +1,5 @@
+do{ my $x = {
+       'AP-pdf-renamer*' => 1,
+       'blib' => 1
+     };
+$x; }

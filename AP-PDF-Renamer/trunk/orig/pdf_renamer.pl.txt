@@ -1,0 +1,2100 @@
+This script was written in 2007 and modified over time, mostly to add/remove journals.
+It was written by Dave Dehetre.
+It lived on the Xinet Solaris server.
+It was deprecated in 2014.
+
+#! /usr/bin/perl
+
+
+use File::Copy;
+#use Mail::Sendmail;#for email routines
+
+my %current_job_data;
+my $temp_authors;
+my $temp_journal_code;
+my $issue_code;
+
+my $journal_code;
+my $enclosing_folder;
+#my $path = "/home/dave/projects/pdf_rename/inputs/";# set to 'root' branch of tree for inputs, can be read from command line
+my $path = "/raid/Production/_convert/pdf_rename/";
+my $error_dir_listing;
+#my $output_path = "/home/dave/projects/pdf_rename/outputs/";
+my $output_path = "/raid/Production/_convert/pdf_rename/_out/";
+my $input_folder = $path;
+my $file_mod_date;
+my $full_filename;
+my $input_filename;
+my $output_filename;
+my $full_output_filename;
+my $source_filename;
+my $primary_source_filename;
+#my $secondary_source_filename;
+my $wildcard_source_filename;
+my $source_file_path_xinet;
+#my $source_file_path_nas03;
+my $completed_trigger_file_target;
+#my $completed_triggers_path = $input_folder."/complete/";
+my $completed_triggers_path = "/raid/Production/_convert/pdf_rename/complete/";#!!!!testing version
+my @sourcelisting;
+# my $source_file_path;
+my $trunc_name;
+#!!! live for live use  $input_folder = $ARGV[0];#for dev and test, just type in inputs folder
+#!!! linve for live use $path = $input_folder;# this may change for live work !!!!
+ #$input_filename = $ARGV[0];
+
+my $error_log_file_name = "/raid/Production/_convert/pdf_rename/_logs/errors.log";
+my $activity_log_file_name = "/raid/Production/_convert/pdf_rename/_logs/activity.log";
+
+my $full_output_filename_error;
+my @already_processed_jobs;
+
+####get year####################################################################
+    my ($tsec,$tmin,$thour,$tmday,$tmon,$tyear,
+             $twday,$tyday,$tisdst) = localtime time;
+    $tyear=$tyear+1900;
+    $tmon=$tmon+1;
+##print "$tsec -sec\\n\n";
+    $thisyear = $tyear;
+
+    $start = time;
+    my $datestring = sprintf("%04d-%02d-%02d-%02d-%02d-%02d",$tyear,$tmon,$tmday,$thour,$tmin,$tsec);
+###########end get year####################################
+$date_stamp = get_date_stamp();
+#print "started at $date_stamp \n";
+#!!!!while (1){#infinite loop for persistent working
+$date_stamp = get_date_stamp();
+#print "tick at $date_stamp \n";
+open (ERROR_LOG, ">>$error_log_file_name") || event_gen(4, "Could not open error log file. $! \n\nplease correct this or you will not receive further error output");
+open (ACTIVITY_LOG, ">>$activity_log_file_name") || event_gen(4, "Could not open activity log file. $! \n\nplease correct this or you will not receive further activity logging");
+
+    opendir(DIRHANDLE, $input_folder) || die "Unable to open folder: $input_folder";
+        @tempfilenames = readdir(DIRHANDLE);
+    closedir(DIRHANDLE);
+    #@xmlfiles= grep {/(\.xml|\.val)/} @tempfilenames;#grab out any .xml files and save to display after the directories
+    @jobfiles= grep {/\.tsv|\.csv/} @tempfilenames;#grab out any paradox trigger files
+
+    #@jobfiles= grep {/\.3d/} @tempfilenames;#grab out any .3d files and save to display after the directories
+    #@subfolders = grep { (not /^\.{1,2}\z/) } @tempfilenames;#hopefully just display the subfolders #cut from grep -- and (not /-/
+#   @pdffiles = grep {/(\.pdf)/} @tempfilenames;
+    ######display any files found along with buttons to allow the user to do things to them
+
+#
+    foreach $trigger_file (sort  @jobfiles  ) {#
+        $full_trigger_filename = $path.$trigger_file;
+        $completed_trigger_file_target = $completed_triggers_path.$trigger_file;
+        ##print "test: $full_trigger_filename \n";
+        read_current_data($full_trigger_filename); #reads into global var currentjobdata
+
+
+#!!!test
+# #print "$current_job_data{jcode} curr\n\n";
+# #print "$current_job_data{vol} curr\n\n";
+# #print "$current_job_data{iss} curr\n\n";
+# #print "$current_job_data{month} curr\n\n";
+# #print "$current_job_data{special} curr\n\n";
+# #print "$current_job_data{ap_num} curr\n\n";
+# #print "$current_job_data{cust_num} curr\n\n";
+# #print "$current_job_data{authors} curr\n\n";
+# #print "$current_job_data{cor_author} curr\n\n";
+# #print "$current_job_data{beg_pg} curr\n\n";
+# #print "$current_job_data{end_pg} curr\n\n";
+
+
+
+#!!!! end test
+
+
+
+
+        #$file_mod_date = -M $full_trigger_filename;#
+        #$file_mod_date_string = get_file_date_string($file_mod_date);
+#
+# WAER: File names can contain no dashes, periods, or spaces. Underscores must be used instead. The files should be named as follows:
+# 1XO-WAER_Vol#_customer manuscript #_AP art. #.pdf
+# (waer_79_04060316_03.pdf)  (waer_79_04060316_03q.pdf).
+# REV- Replace page range with 1st author's last name before .pdf Change all hyphens to low lines and close up volume, issue & article number.
+# (waer_770604_Pressman.pdf)
+
+
+#
+# Dave – There are now several sample files on xinet.  The folder location is \\xinet\production\_convert\pdf-rename.
+#
+#
+#
+# The file layout (tab delimited) -
+#
+#
+#
+# jcode
+#
+# vol
+#
+# iss
+#
+# month
+#
+# special
+#
+# ap_num
+#
+# cust_num
+#
+# authors
+#
+# cor_author
+#
+# beg_pg
+#
+# end_pg
+#
+#
+#
+# When null values are encountered the field name with a “no_” prefix is inserted (e.g., no_iss or no_cust_num).
+        $is_a_revison = detect_revision($current_job_data);#rev/1x0, for some naming conv. 1==rev 0==1x0
+        $journal_code = find_four_letter_code($current_job_data);#jcode
+        $volume_number = find_volume($current_job_data);#vol
+        $issue_number = find_issue($current_job_data);#iss
+        $month = find_month($current_job_data);#ap nu
+        $special = find_special($current_job_data);#ap num... month?!!!
+        $article_number = find_article($current_job_data);#ap num... month?!!!
+        $customer_file_id = find_proprietary_id($current_job_data); #--cust_num
+        $authors = find_authors($current_job_data);#ap num... month?!!!
+        $corresponding_author_name = find_corresponding_author_name($current_job_data);# --cor_author.
+        $start_page = find_start_page($current_job_data);#page range
+        $end_page = find_end_page($current_job_data);#
+        $first_letter = find_first_letter($current_job_data);#based on jcode
+        $file_type = find_file_type($current_job_data);#for now, always pdf, but leave in place for later
+        #$file_type = find_type($current_job_data);#for now, always a pdf, but leaving for later
+        $date_stamp = get_date_stamp();
+        $date_stamp =~ s/ //g;
+        #$issue_code = $journalcode."-".$volume."-".$issue;
+        #$output_filename = $input_filename;
+
+##########now a big case block for detecting which journal (and it's corresponding requirements) this is#############
+#####################################################################################################################
+$output_filename = "NO_DATA";#to avoid carryover if there's an error
+$source_filename = "NO_DATA";
+#???!!! question:  if there is one thing in the custom defs, but something else in the default defs(spreadsheet_)  need to resolve that...
+
+
+#!!!??? other question, there are some journals listed as custom but that don't have entries in the word doc describing custom details
+
+#AJCS: Name Book Reviews with Galoob.pdf
+
+# AJMR  AM  1XO 1st Author/Rev-Rev Stage            Penta
+
+        if ($journal_code eq "ajmr"){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+            $output_filename = $journal_code."_".$volume_number."-".$issue_number."-".$article_number."-".$temp_authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+
+# BIRE:
+# 1XO= 3-letter code_vol_issue_AP article #_page_range_cust. MS #.pdf  (bor_76_01_12_105_111_05183.pdf)
+# Revision stages should be added before .pdf:
+# bor_75_6_1_823_835_52290_1R.pdf.
+#
+
+        elsif ($journal_code eq "bire"){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $customer_file_id =~ s/[0-9]+[^0-9]//g;
+            $customer_file_id =~ s/[^0-9]//g;
+            $start_page =~ s/no_beg_pg/0/;
+            $end_page =~ s/no_end_pg/0/;
+
+            $output_filename = "bor_".$volume_number."_".$issue_number."_".$article_number."_".$customer_file_id;#.
+
+            #$output_filename = $journal_code."_".$volume_number."_".$issue_number."_".$article_number."_".$start_page."_".$end_page.".".$customer_file_id;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nasj03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+
+# BVRV: 4-letter code -Vol-IssAP#-1st Authors last name
+# (bvrv-25-301-Fishman.pdf)
+#
+        elsif ($journal_code eq "bvrv"){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+            $output_filename = $journal_code."_".$volume_number."-".$issue_number."-".$article_number."-".$temp_authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+# CCAB: Add 1st authors last name in place of page range before .pdf
+# (ccab-05-01=01_Boundy.pdf)
+#
+        elsif ($journal_code eq "ccab"){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+            $output_filename = $journal_code."_".$volume_number."-".$issue_number."-".$article_number."-".$temp_authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+# EEGO: 4-letter code -Vol-IssAP#-1st Authors last name
+    elsif ($journal_code eq "eego"){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $output_filename = $journal_code."_".$volume_number."-".$issue_number."-".$article_number."-".$authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+# EXBM: 1XO-remove pg range/Rev-keep pg range
+#
+        elsif ($journal_code eq "exbm"){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $output_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+# Fisheries: (AQAH, FIMA, FITR, NAJA) 1XO Only
+# AFS manuscript #_first author’s last name_4-letter code_vol_issueAP article #.pdf
+# (M04-210_Schramm_fima_26_410.pdf_).
+# For sidenotes add a “q” before the volume #.
+# (M04-210_Schramm_fima_q26_410.pdf).
+#
+        elsif (($journal_code eq "aqah")||($journal_code eq "fima")||($journal_code eq "fitr")||($journal_code eq "naja")){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+#print "\n\ntesttempauth $temp_authors \n\n";
+            $temp_issue = $issue_number;
+            $temp_issue =~ s/^[0]([0-9]+)$/$1/;
+#print "\n\ntesttempiss $temp_issue \n\n";
+
+            $output_filename = $customer_file_id."_".$temp_authors."-".$journal_code."-".$volume_number."-".$temp_issue.$article_number;#.
+            #$output_filename =~ s/[-. ]/_/g;
+#print "\ntestof $output_filename \n";
+            $output_filename = $output_filename.".".$file_type;
+            #$output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+#print "\ntestof $output_filename \n";
+
+        }
+
+#FIDM is a new job??  not in the original lists..
+
+        elsif (($journal_code eq "fidm")){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+#print "\n\ntesttempauth $temp_authors \n\n";
+            $temp_issue = $issue_number;
+            $temp_issue =~ s/^[0]([0-9]+)$/$1/;
+#print "\n\ntesttempiss $temp_issue \n\n";
+
+            $output_filename = $customer_file_id."_".$temp_authors."-".$journal_code."-".$volume_number."-".$temp_issue.$article_number;#.
+            #$output_filename =~ s/[-. ]/_/g;
+#print "\ntestof $output_filename \n";
+            $output_filename = $output_filename.".".$file_type;
+            #$output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+#print "\ntestof $output_filename \n";
+
+        }
+
+
+# Gerontology: 2-3 letter code-Vol-Iss-AP#_1st authors last name.pdf
+# GRNA (JGA-61-11-01_Rice.pdf)
+# GRNB (JGB-61-06-02_Barg.pdf)
+# GRNT (TG-46-06-03_Emlet.pdf)
+#
+        elsif (($journal_code eq "grna")||($journal_code eq "grnb")||($journal_code eq "grnt")){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+
+            if ($journal_code eq "grna"){ $temp_journal_code = "JGA";}
+            if ($journal_code eq "grnb"){ $temp_journal_code = "JGB";}
+            if ($journal_code eq "grnt"){ $temp_journal_code = "TG";}
+
+            $output_filename = $temp_journal_code."-".$volume_number."-".$issue_number."-".$article_number."_".$temp_authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+#           ($journal_code eq "hepr") ||
+        elsif (($journal_code eq "hepr")){#
+
+            $output_filename = "ajhp-".$volume_number."-".$issue_number."-".$article_number;#.
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+        }
+
+
+# IBMR-IBMS: Remove article number and replace page range with 1st author's last name (ibmr-49-02-Coteus.pdf)
+#
+
+        elsif (($journal_code eq "ibmr")||($journal_code eq "ibms")){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $authors;
+            $temp_authors =~ s/[ _].+//g;
+            $output_filename = $journal_code."-".$volume_number."-".$issue_number."-".$temp_authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+
+        elsif (($journal_code eq "insm")){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $authors;
+            $temp_authors =~ s/[ _].+//g;
+            $output_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."_".$temp_authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+# IEEE: (ANHC, DTCO, MICR)
+# Charlesworth adds the 1st 3 to 4 letters of the corresponding authors name before .pdf
+# (micr-27-05-pull.pdf)
+#
+
+        elsif (($journal_code eq "anhc")||($journal_code eq "dtco")||($journal_code eq "micr")){#
+            $trunc_name = $corresponding_author_name;
+            $trunc_name = substr($trunc_name, 0, 4);
+            #$customer_file_id =~ s/[-_ .]//g;
+            $output_filename = $journal_code."_".$volume_number."-".$issue_number."-".$trunc_name;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+#MERE*  AM  1XO 1st Author/Rev-Rev Stage            Penta
+        elsif (($journal_code eq "mere")){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+            $output_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."_".$temp_authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+                $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+
+
+#           ($journal_code eq "mlab") ||
+        elsif (($journal_code eq "mlab")){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $corresponding_author_name;
+            $temp_authors =~ s/[ ].+//g;
+            $temp_journal_code = "jmla";
+            $output_filename = $temp_journal_code."_".$volume_number."-".$issue_number."-".$article_number."-".$temp_authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+#($journal_code eq "mobt") ||
+
+        elsif (($journal_code eq "mobt")){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+            $output_filename = $journal_code."_".$volume_number."_".$issue_number."-".$article_number."_".$temp_authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+                $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+#           ($journal_code eq "novo") ||
+
+elsif (($journal_code eq "novo")){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+            $output_filename = $journal_code."_".$volume_number."_".$issue_number."-".$article_number."_".$temp_authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+                $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+#ochs
+    elsif (($journal_code eq "ochs")){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+            $output_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."_".$temp_authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+                $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+            #($journal_code eq "panp") ||
+        elsif ($journal_code eq "panp"){#
+            $customer_file_id =~ s/[_ .]/-/g;
+            $output_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."-".$customer_file_id;#.
+
+            $output_filename =~ s/[-. ]/-/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+
+        }
+
+# PLoS: (PLBI, PLCB, PLCT, PLGE, PLME, PLPA)
+# Replace page range with Corresponding author name before .pdf
+# (plbi-27-07-07_Weigel.pdf)
+#
+        elsif (($journal_code eq "plbi")||($journal_code eq "plcb")||($journal_code eq "plct")||($journal_code eq "plge")||($journal_code eq "plme")||($journal_code eq "plpa")){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $corresponding_author_name;
+            $temp_authors =~ s/[ ].+//g;
+            $output_filename = $journal_code."_".$volume_number."-".$issue_number."-".$article_number."-".$temp_authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+
+        elsif (($journal_code eq "rsoc")){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $temp_authors = $corresponding_author_name;
+            $temp_authors =~ s/[ ].+//g;
+            $output_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."_".$temp_authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+
+# VCLP: Replace page range with first author's last name before .pdf, use all hyphens (vclp-108-12-01-Misawa.pdf)
+#
+#
+        elsif (($journal_code eq "vclp")){#
+            #$customer_file_id =~ s/[-_ .]//g;
+            $output_filename = $journal_code."-".$volume_number."-".$issue_number."-".$authors;#.
+            #$output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+
+
+
+#VETD: Separate “Short Communications” rename using Charlesworth default.
+#
+
+
+# WAER: File names can contain no dashes, periods, or spaces. Underscores must be used instead. The files should be named as follows:
+# 1XO-WAER_Vol#_customer manuscript #_AP art. #.pdf
+# (waer_79_04060316_03.pdf)  (waer_79_04060316_03q.pdf).
+# REV- Replace page range with 1st author's last name before .pdf Change all hyphens to low lines and close up volume, issue & article number.
+# (waer_770604_Pressman.pdf)
+#
+        elsif ($journal_code eq "waer"){#
+            $customer_file_id =~ s/[-_ .]//g;
+            $output_filename = $journal_code."_".$volume_number."_".$customer_file_id."_".$article_number;#.
+
+            $output_filename =~ s/[-. ]/_/g;
+            $output_filename = $output_filename.".".$file_type;
+            $output_filename = lc($output_filename);
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+
+        }
+#
+#
+#       elsif ($journal_code eq "wete"){#!!!!this one is just for testging and must come out for live use
+#
+#           $customer_file_id =~ s/[-_ .]//g;
+#           $output_filename = $journal_code."_".$volume_number."_".$customer_file_id."_".$article_number;#.
+#
+#           $output_filename =~ s/[-. ]/_/g;
+#           $output_filename = $output_filename.".".$file_type;
+#           $output_filename = lc($output_filename);
+#           $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+#           $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+    #       $source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            ##$source_filename = find_xinet_path($source_filename);
+#
+#       }
+# ##!!!! prevl. must come out for live
+        elsif ($journal_code eq "wils"){#
+            $output_filename = $journal_code."_".$volume_number."_".$issue_number.$article_number."_".$start_page."_".$end_page.".".$file_type;
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+# WILD: At 1XO ONLY: Remove page range: 4 letter code-vol-issue-AP article #.pdf
+# Revisions: Retain page range
+#
+#
+# >
+# > Should look like this: wmon-170-00-01.pdf
+# >
+# > 4letter code-Vol-Iss-AP article#.pdf
+# >
+# > Thanks
+# > ~M
+
+
+elsif ($journal_code eq 'wmon'){# default - page range
+            $output_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number.".".$file_type;
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+# Looks like this: W7RE8Y~I.PDF
+#
+# Should look like this: wild-72-03-27.pdf
+#
+# No pg range.
+
+        elsif ($journal_code eq 'wild'){# default - page range
+            $output_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number.".".$file_type;
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+        elsif ($journal_code eq "zamd"){#default
+            $output_filename = $journal_code."_".$volume_number."_".$issue_number.$article_number."_".$start_page."_".$end_page.".".$file_type;
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+
+#now the default  3b2 cases... acording to this grid:
+# ABOT  AM  Replace pg range with Corresponding Author          3B2
+# AJCS* ME  Replace pg range with 1st Author            3B2
+
+        elsif ($journal_code eq "ajcs") {
+            $temp_authors = $authors;
+            $temp_authors =~ s/[ ].+//g;#only use first author
+            $output_filename = $journal_code."_".$volume_number."_".$issue_number."_".$article_number."_".$temp_authors.".".$file_type;
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use
+        }
+
+# AMBI  ACG Default         3B2
+# BVRV  AM  Replace pg range with 1st Author            3B2
+# CCAB  ACG Replace pg range with 1st Author            3B2
+# COPA  AM  Default         3B2
+# ECAP  AM  Default/Serv-U          3B2
+# ECOL  AM  Default/Serv-U          3B2
+# EEGT  AM  Default         3B2
+# EMON  AM  Default/Serv-U          3B2
+# EXBM  ME  1XO-remove pg range/Rev-keep pg range           3B2
+# IEAM  ACG Default         3B2
+# JNBS  AM  Default         3B2
+# MAMM  ACG Default         3B2
+# MUVO  ME  Default         3B2
+# ORIM  ACG Default         3B2
+# PDPA  ACG Default         3B2
+# PHOT  AM  Default         3B2
+
+
+
+
+        elsif (($journal_code eq "abot") ||
+            ($journal_code eq "ambi") ||
+            ($journal_code eq "bvrv") ||
+            ($journal_code eq "ccab") ||
+            ($journal_code eq "copa") ||
+            ($journal_code eq "ecap") ||
+            ($journal_code eq "ecol") ||
+            ($journal_code eq "eegt") ||
+            ($journal_code eq "emon") ||
+            ($journal_code eq "exbm") ||
+            ($journal_code eq "ieam") ||
+            ($journal_code eq "jnbs") ||
+            ($journal_code eq "mamm") ||
+            ($journal_code eq "muvo") ||
+            ($journal_code eq "orim") ||
+            ($journal_code eq "pdpa") ||
+            ($journal_code eq "phot") ||
+            ($journal_code eq "poli") ||
+            ($journal_code eq "spcm") ||
+            ($journal_code eq "ursu") ||
+            ($journal_code eq "rala") ||
+            ($journal_code eq "scex")
+            ){
+#here is just the default for 3b2:
+# pdpa-10-01-02_11..15.pdf
+# pdpa-10-01-02q_1..1.pdf
+            $output_filename = $journal_code."_".$volume_number."_".$issue_number."-".$article_number."_".$start_page."_".$end_page.".".$file_type;
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+            }
+
+
+# joe put these here
+#
+#AAAN and ARVO titles
+# iovs-10-01-02_12-1234.pdf
+
+        elsif (
+            ($journal_code eq "iovs") || 
+            ($journal_code eq "jovi") ||
+            ($journal_code eq "acch") ||
+            ($journal_code eq "accr") ||
+            ($journal_code eq "ajpt") ||
+            ($journal_code eq "apin") ||
+            ($journal_code eq "atax") ||
+            ($journal_code eq "bria") ||
+            ($journal_code eq "ciia") ||
+            ($journal_code eq "iace") ||
+            ($journal_code eq "isys") ||
+            ($journal_code eq "jeta") ||
+            ($journal_code eq "jiar") ||
+            ($journal_code eq "jltr") ||
+            ($journal_code eq "jmar") ||
+            ($journal_code eq "ogna") ||
+            ($journal_code eq "tnae")   
+              ){
+            if ($customer_file_id =~ m{^[a-zA-Z]+[-_]}xmsi){$customer_file_id =~ s{^[a-zA-Z]+[-_](.+)$}{$1}xmsi};
+            $output_filename = $journal_code."_".$volume_number."_".$issue_number."-".$article_number."_".$customer_file_id.".".$file_type;
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+             }
+            
+            
+#now the defaults cw:
+        elsif (($journal_code eq "aare") ||
+            ($journal_code eq "addi") ||
+            ($journal_code eq "amfj") ||
+            ($journal_code eq "amna") ||
+            ($journal_code eq "amnb") ||
+            ($journal_code eq "andr") ||
+            ($journal_code eq "anhc") ||
+            ($journal_code eq "anpr") ||
+            ($journal_code eq "arac") ||
+            ($journal_code eq "avdi") ||
+            ($journal_code eq "avms") ||
+            ($journal_code eq "bryo") ||
+            ($journal_code eq "cast") ||
+            ($journal_code eq "cave") ||
+            ($journal_code eq "cole") ||
+            ($journal_code eq "cond") ||
+            ($journal_code eq "cope") ||
+            ($journal_code eq "cpcj") ||
+            ($journal_code eq "cuge") ||
+            ($journal_code eq "eain") ||
+            ($journal_code eq "enth") ||
+            ($journal_code eq "estu") ||
+            ($journal_code eq "etbi") ||
+            ($journal_code eq "ethn") ||
+            ($journal_code eq "flsc") ||
+            ($journal_code eq "fora") ||
+
+            ($journal_code eq "herp") ||
+            ($journal_code eq "hmon") ||
+            ($journal_code eq "hpet") ||
+            ($journal_code eq "hyre") ||
+            ($journal_code eq "iaas") ||
+            ($journal_code eq "inqr") ||
+
+            ($journal_code eq "ipsm") ||
+            ($journal_code eq "jaae") ||
+            ($journal_code eq "jeab") ||
+            ($journal_code eq "jvim") ||
+            ($journal_code eq "jwdi") ||
+            ($journal_code eq "kirt") ||
+            ($journal_code eq "leco") ||
+            ($journal_code eq "limn") ||
+            ($journal_code eq "madr") ||
+            ($journal_code eq "myco") ||
+            ($journal_code eq "ndst") ||
+            ($journal_code eq "novi") ||
+            ($journal_code eq "novo") ||
+            ($journal_code eq "ochs") ||
+            ($journal_code eq "palo") ||
+            ($journal_code eq "pamb") ||
+
+            ($journal_code eq "pbsw") ||
+            ($journal_code eq "phya") ||
+            ($journal_code eq "wete") ||
+            ($journal_code eq "trps") ||
+            ($journal_code eq "wetl") ||
+            ($journal_code eq "swna") ||
+            ($journal_code eq "tbot") ||
+            ($journal_code eq "tese") ||
+            ($journal_code eq "wbio") ||
+            ($journal_code eq "wees") ||
+            ($journal_code eq "went") ||
+            ($journal_code eq "veli") ||
+            ($journal_code eq "vetd") ||
+            ($journal_code eq "vetp") ||
+            ($journal_code eq "rapt") ||
+            ($journal_code eq "pnut") ||
+            ($journal_code eq "sedp") ||
+            ($journal_code eq "sarc") ||
+            ($journal_code eq "rama") ||
+            ($journal_code eq "soec") ||
+            ($journal_code eq "pppj")
+        ){
+            $output_filename = $journal_code."_".$volume_number."_".$issue_number."-".$article_number."_".$start_page."_".$end_page.".".$file_type;
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+            #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+
+            #$source_filename = find_xinet_path($source_filename);
+        }
+
+
+
+
+
+# commented out by Joe
+#
+#now the defaults penta
+#
+#       elsif (($journal_code eq "coas") ||
+#           ($journal_code eq "amnl") ||
+#           ($journal_code eq "amnh") ||
+#           ($journal_code eq "alis") ||
+#           ($journal_code eq "geos") ||
+#           ($journal_code eq "food") ||
+#           ($journal_code eq "para") ||
+#           ($journal_code eq "pbio") ||
+#           ($journal_code eq "attr") ||
+#           ($journal_code eq "mtps") ||
+#           ($journal_code eq "astc") ||
+#           ($journal_code eq "mmsp") ||
+#           ($journal_code eq "angl") ||
+#           ($journal_code eq "nwnt") ||
+#           ($journal_code eq "nwts") ||
+#           ($journal_code eq "arpa") ||
+#           ($journal_code eq "entc") ||
+#           ($journal_code eq "zamd") ||
+#           ($journal_code eq "wils") ||
+#           ($journal_code eq "weme") ||
+#           ($journal_code eq "scre") ||
+#           ($journal_code eq "scnu") ||
+#           ($journal_code eq "rare") ||
+#           ($journal_code eq "pleo") ||
+#           ($journal_code eq "plem") ||
+#           ($journal_code eq "selb")
+#           )
+#           {
+#           $output_filename = $journal_code."_".$volume_number."_".$issue_number.$article_number."_".$start_page."_".$end_page.".".$file_type;
+#           $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+#           $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+#           #$source_file_path_nas03 = find_nas03_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+#
+#           #$source_filename = find_xinet_path($source_filename);
+#       }
+        else{
+#here is just the default for 3b2 again:
+# pdpa-10-01-02_11..15.pdf
+# pdpa-10-01-02q_1..1.pdf
+            $output_filename = $journal_code."_".$volume_number."_".$issue_number."-".$article_number."_".$start_page."_".$end_page.".".$file_type;
+            $source_filename = $journal_code."-".$volume_number."-".$issue_number."-".$article_number."*.".$file_type;#.for finding the original on the file server
+            $source_file_path_xinet = find_xinet_path_only($source_filename);#make a blank path for utility use (i.e. do a directory listing of the source directory)
+        }       
+
+
+
+
+
+#~~~~~ some filename cleanp things
+
+$output_filename =~ s/[ ]*et[ ]al[ ]*//g;
+$output_filename =~ s/\//_/g;
+$output_filename =~ s/[ ]/_/g;
+$output_filename =~ s/[&]/and/g;
+
+#~~~~~~end filename cleanjup things
+$primary_source_filename = find_xinet_path($source_filename);
+$temp_source_filename = $source_filename;
+$temp_source_filename =~ s/[.]pdf/_$start_page..$end_page/;
+$temp_source_filename =~ s/[.]pdf//;
+#$secondary_source_filename = find_nas03_path($temp_source_filename);
+
+
+            opendir(DIRHANDLE, $source_file_path_xinet) || print  "\nUnable to open folder: $source_file_path_xinet";
+                @sourcelisting = readdir(DIRHANDLE);
+            closedir(DIRHANDLE);
+            foreach $a_source_file (@sourcelisting){
+                $error_dir_listing = $error_dir_listing."\n--".$source_file_path_xinet.$a_source_file;
+                print  "--$a_source_file \n";
+            }
+
+        #   opendir(DIRHANDLE, $source_file_path_nas03) || #print "\nUnable to open folder: $source_file_path_nas03";
+            #   @sourcelisting = readdir(DIRHANDLE);
+#           closedir(DIRHANDLE);
+#           #print "\n\n__ TEST $source_file_path_nas03 \n";
+#           foreach $a_source_file (@sourcelisting){
+#               $error_dir_listing = $error_dir_listing."\n--".$source_file_path_nas03.$a_source_file;
+#               #print "--$a_source_file \n";
+#               #print "--TEST--\n";
+#           }
+
+
+        if (-e $primary_source_filename){
+            ##print "\nyes\n";
+            #print "filename:   $trigger_file maps to source file $source_filename";
+            #print "\nyes\n";
+            $full_output_filename = $output_path.$output_filename;
+            if (!(-e $full_output_filename)){#don't redo jobs that are already there
+
+                copy($primary_source_filename,$full_output_filename) || print  "COULD NOT COPY $primary_source_filename to $full_output_filename\n\n";
+            }
+        }
+#       elsif (-e $secondary_source_filename){ #try secondary location
+#           event_gen(3, "file found in non-standard location:   $trigger_file requests file that should be at:\n $primary_source_filename,\n but was found at: $secondary_source_filename");
+#           #print "\nyes\n";
+#           #print "filename:   $trigger_file maps to source file $source_filename";
+#           #print "\nyes\n";
+#       }
+        else{
+
+        if (!(@existing_job = grep (/$trigger_file/,  @already_processed_jobs))){
+                unshift(@already_processed_jobs,$trigger_file);
+            event_gen(3, "file was not found:   $trigger_file requests file that should be at:\n $primary_source_filename,\n but was not found there nor was it found at:  $error_dir_listing \n for diagnostic purposes: this is the info retrieved from the trigger file\n jcode: $current_job_data{jcode}\n
+                \nvol:$current_job_data{vol} \n
+                \niss:$current_job_data{iss} \n
+                \nmonth:$current_job_data{month} \n
+                \nspecial:$current_job_data{special} \n
+                \nap_num:$current_job_data{ap_num} \n
+                \ncust_num:$current_job_data{cust_num} \n
+                \nauthors:$current_job_data{authors} \n
+                \ncor_author:$current_job_data{cor_author} \n
+                \nbeg_pg:$current_job_data{beg_pg} \n
+                \nend_pg:$current_job_data{end_pg} \n");
+
+            $full_output_filename_error = $output_path.$output_filename."error.txt";
+
+            open (ERRTOKENFILE, ">$full_output_filename_error") || print   "\ncould not open error token file:$full_output_filename_error \n ";
+                print ERRTOKENFILE " file was not found:   $trigger_file requests file that should be at:\n $primary_source_filename,\n but was not found there nor was it found at:   $error_dir_listing \n for diagnostic purposes: this is the info retrieved from the trigger file\n jcode: $current_job_data{jcode}\nvol:$current_job_data{vol} \n\niss:$current_job_data{iss} \n\nmonth:$current_job_data{month} \n\nspecial:$current_job_data{special} \n\nap_num:$current_job_data{ap_num} \n\ncust_num:$current_job_data{cust_num} \n\nauthors:$current_job_data{authors} \n\ncor_author:$current_job_data{cor_author} \n\nbeg_pg:$current_job_data{beg_pg} \n\nend_pg:$current_job_data{end_pg} \n\n";#
+            close ERRTOKENFILE;
+#           opendir(DIRHANDLE, $source_file_path_xinet) || #print "Unable to open folder: $source_file_path_xinet";
+#               @sourcelisting = readdir(DIRHANDLE);
+#           closedir(DIRHANDLE);
+#           foreach $a_source_file (@sourcelisting){
+#               #print "--$a_source_file \n";
+#           }
+#
+#           opendir(DIRHANDLE, $source_file_path_nas03) || #print "Unable to open folder: $source_file_path_nas03";
+#               @sourcelisting = readdir(DIRHANDLE);
+#           closedir(DIRHANDLE);
+#           #print "\n\n__ TEST $source_file_path_nas03 \n";
+#           foreach $a_source_file (@sourcelisting){
+#               #print "--$a_source_file \n";
+#               #print "--TEST--\n";
+#           }
+#           #@xmlfiles= grep {/(\.xml|\.val)/} @tempfilenames;#grab out any .xml files and save to display after the directories
+#           #@fileslisting = grep {/\.tsv|\.csv/} @sorucelisting;#grab out any paradox trigger files
+
+
+
+
+
+#print "pfn: $primary_source_filename\n";
+#print "ofn: $output_filename\n";
+##print "sfn: $secondary_source_filename\n";
+            #print "\nno\n";
+#print "filename:   $trigger_file \nmaps to source file $source_filename";
+
+        }
+#~~!!!! this part is a hack/shunt to process files with wildcards... should not be used long term (past Feb08) as it is not robust
+
+    $wildcard_source_filename = $primary_source_filename;
+    $wildcard_source_filename =~ s/(.+[a-z][a-z][a-z][a-z][-][0-9]+[-][0-9]+[-][0-9]+).+[.]pdf/$1\*\.pdf/;
+    chomp $wildcard_source_filename;
+    $relaxed_source_filename = `ls $wildcard_source_filename`;
+    chomp $relaxed_source_filename;
+    #print "\n\n\n rfn $relaxed_source_filename\n\n";
+    $full_output_filename = $output_path.$output_filename;
+    #print "\n\n\nfof $full_output_filename\n\n";
+    chomp $full_output_filename;
+    if (!(-e $full_output_filename)){#don't redo jobs that are already there
+        copy ($relaxed_source_filename, $full_output_filename) || print   "\n\nCOULD NOT COPY $relaxed_source_filename to $output_path$output_filename\n\n";
+    }
+
+
+#~~~!!!! end hack
+}
+
+#now for testing: either way, print dir listing
+
+#       $full_output_filename = $output_path.$output_filename;
+#
+#
+#
+#       copy($primary_source_filename,$full_output_filename) || #print "COULD NOT COPY $primary_source_filename to $full_output_filename\n\n";
+
+
+        #!!! something needs to do this function, either this or some other scheme, long term...  rename ($full_trigger_filename, $completed_trigger_file_target);
+#!!!!testing version:
+
+move ($full_trigger_filename, $completed_trigger_file_target);
+$error_dir_listing = "";#zero out to prevent crosstalk amongst jobs
+    }#for each job file
+open ERROR_LOG;
+close ACTIVITY_LOG;
+sleep 4;
+#!!!!}#end main while loop (infinite)
+
+#!!! main testing bit here
+
+
+
+#!!!! end main testing bit
+
+
+   exit;
+
+
+
+sub get_time_dif{
+    $datea= shift;
+    $timea= shift;
+    $dateb= shift;
+    $timeb= shift;
+    $timea =~ s/[:]//g;
+    $datea =~ s/[-]//g;
+    $timeb =~ s/[:]//g;
+    $dateb =~ s/[-]//g;
+
+    $timesa = sprintf("%06d",$timea);
+    $timesb = sprintf("%06d",$timeb);
+
+    $timea = $datea.$timesa;
+    $timeb = $dateb.$timesb;
+
+    #$timesa = sprintf("%06d",$timea);
+    #$timesb = sprintf("%06d",$timeb);
+    $diff = abs(int($timesa)-int($timesb));
+
+    if ($diff > 10){
+        ##print "dtes:  $timea  $timeb $diff \n\n";
+    }
+    return $diff;
+}#end gettimediff
+
+sub get_file_date_string {
+    my $file_time_stamp = shift;
+    my $start = time;
+    my $fyear;
+    my $fhour;
+    my $fmin;
+    my $fmon;
+    my $fday;
+    my $fmin;
+
+
+
+    #$file_time_stamp = $start - $file_time_stamp;
+    $file_time_stamp = $file_time_stamp * 86400;
+    $start = $start - $file_time_stamp;
+    my ($tsec,$tmin,$thour,$tmday,$tmon,$tyear,
+             $twday,$tyday,$tisdst) =   localtime $start;
+    $tyear=$tyear+1900;
+    $tmon=$tmon+1;
+    $thisyear = $tyear;
+#
+#   use integer;#force integer arithmatic for date processing reasons (see no integer below for end block)
+#       $fyear = $file_time_stamp / 365;#expresses how old the file is in years\
+#       $tyear = $tyear -  $fyear;
+#
+#       $fmon = $file_time_stamp - $fyear /
+#       $tmon = $tmon - $fmon;
+#
+#   no integer;
+    my $datestring = sprintf("%04d-%02d-%02d (%02d:%02d:%02d)",$tyear,$tmon,$tmday,$thour,$tmin,$tsec);
+    return $datestring;
+
+}#end get file date string
+#!!!! next bit superceded by later version copied from generic dispatch script
+# sub find_first_letter {
+#   my $filename = shift; #full file name
+#   $filename = lc($filename);
+#   $filename =~ s/^([a-z]).*$/$1/;
+#   return $filename;
+#
+# }#end sub findfirstletter
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#subroutine to read in and get paradox data from csv file
+#takes a four letter code as input, and populates the global
+#vars, needs to be run each time the four letter code changes
+#i.e. once per input file or folder
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+sub read_jrnl_list_data{
+    my $four_letter_code = shift; #full file name
+    my $header_start="Jrnl_Code";
+    my $temp_entry;
+    my $jrnl_record_found = "FALSE";
+    $four_letter_code = uc($four_letter_code);#because the paradox file has uppercase codes
+
+    foreach $journal_entry (@jrnl_list){
+        chomp($journal_entry);
+#this first if block is just to find the first (header) line of the file, assumes the first code is 'jrnl_code'
+#       $temp_entry = $journal_entry;
+#       $temp_entry = lc($temp_entry);
+#       $temp_entry =~ s/[ ]//g;
+#       $temp_entry=~ s/[^a-z0-9]//g;
+        if ($journal_entry =~ m/^$header_start\t(.*)\t(.*)\t(.*)\t(.*)\t(.*)\t(.*)\t(.*)\t(.*)\t(.*)$/){
+            debug_print(7,$journal_entry);
+
+#get vars to named vars and lowercase
+            $journal_heading=uc($1);
+            $society_heading=uc($2);
+            $frequency_heading=uc($3);
+            $s_code_heading=uc($4);
+            $avg_press_run_heading=uc($5);
+            $acct_mgr_heading=uc($6);
+            $man_editor_heading=uc($7);
+            $level_of_edit_heading=uc($8);
+            $composition_heading=uc($9);
+#strip out spaces
+            $journal_heading=~ s/[ ]//g;
+            $society_heading=~ s/[ ]//g;
+            $frequency_heading=~ s/[ ]//g;
+            $s_code_heading=~ s/[ ]//g;
+            $avg_press_run_heading=~ s/[ ]//g;
+            $acct_mgr_heading=~ s/[ ]//g;
+            $man_editor_heading=~ s/[ ]//g;
+            $level_of_edit_heading=~ s/[ ]//g;
+            $composition_heading=~ s/[ ]//g;
+#strip out non cap and non alphabetic characters
+            $journal_heading=~ s/[^A-Z]//g;
+            $society_heading=~ s/[^A-Z]//g;
+            $frequency_heading=~ s/[^A-Z]//g;
+            $s_code_heading=~ s/[^A-Z]//g;
+            $avg_press_run_heading=~ s/[^A-Z]//g;
+            $acct_mgr_heading=~ s/[^A-Z]//g;
+            $man_editor_heading=~ s/[^A-Z]//g;
+            $level_of_edit_heading=~ s/[^A-Z]//g;
+            $composition_heading=~ s/[^A-Z]//g;
+
+            debug_print(7,"journal_heading $journal_heading\n society_heading $society_heading\n frequency_heading $frequency_heading\n s_code_heading $s_code_heading\n avg_press_run_heading $avg_press_run_heading\n acct_mgr_heading $acct_mgr_heading\n man_editor_heading $man_editor_heading\n level_of_edit_heading $level_of_edit_heading\n composition_heading $composition_heading\n\nfourletcode: $four_letter_code");
+        }
+#end first line extraction
+
+#now find the line of interest
+        if ($journal_entry =~ m/^$four_letter_code\t(.*)\t(.*)\t(.*)\t(.*)\t(.*)\t(.*)\t(.*)\t(.*)\t(.*)$/){
+            debug_print(7,$journal_entry);
+#get vars to named vars and lowercase
+            $journal_val=lc($1);
+            $society_val=lc($2);
+            $frequency_val=lc($3);
+            $s_code_val=lc($4);
+            $avg_press_run_val=lc($5);
+            $acct_mgr_val=lc($6);
+            $man_editor_val=lc($7);
+            $level_of_edit_val=lc($8);
+            $composition_val=lc($9);
+#strip out spaces
+            $journal_val=~ s/[ ]//g;
+            $society_val=~ s/[ ]//g;
+            $frequency_val=~ s/[ ]//g;
+            $s_code_val=~ s/[ ]//g;
+            $avg_press_run_val=~ s/[ ]//g;
+            $acct_mgr_val=~ s/[ ]//g;
+            $man_editor_val=~ s/[ ]//g;
+            $level_of_edit_val=~ s/[ ]//g;
+            $composition_val=~ s/[ ]//g;
+#strip out cap and non alphanumeric characters
+            $journal_val=~ s/[^a-z0-9]//g;
+            $society_val=~ s/[^a-z0-9]//g;
+            $frequency_val=~ s/[^a-z0-9]//g;
+            $s_code_val=~ s/[^a-z0-9]//g;
+            $avg_press_run_val=~ s/[^a-z0-9]//g;
+            $acct_mgr_val=~ s/[^a-z0-9]//g;
+            $man_editor_val=~ s/[^a-z0-9]//g;
+            $level_of_edit_val=~ s/[^a-z0-9]//g;
+            $composition_val=~ s/[^a-z0-9]//g;
+            $jrnl_record_found = "TRUE";
+        }
+    }
+    if ($jrnl_record_found eq "FALSE") {
+        $composition_val = "BADCOMPOSITION";
+    }
+    debug_print(7,"journal_val $journal_val\n society_val $society_val\n frequency_val $frequency_val\n s_code_val $s_code_val\n avg_press_run_val $avg_press_run_val\n acct_mgr_val $acct_mgr_val\n man_editor_val $man_editor_val\n level_of_edit_val $level_of_edit_val\n composition_val $composition_val\n\n");
+    return $jrnl_record_found;
+}
+
+#end read_jrnl_list_data
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+        print ERROR_LOG "$message1\n";
+        print ACTIVITY_LOG "*errors*\t";
+        print ACTIVITY_LOG "$message1\n";
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+sub debug_print {
+    #this routine is so that debug output can be turned on and off globally without commenting out each line.
+    my $level_code = shift;# this level code is really a dummy, the structure is in place for later implementation
+    #arbitrarily, the only value used now is 3
+    my $message = shift;
+    my $date_stamp = get_date_stamp();
+
+#   if ($level_code <= $do_debug_print){
+    if ($level_code <= $debug_level){
+        #print ">>$date_stamp\t$message <<\n";
+    }
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ sub event_gen {
+    my $event_type = shift;#type of event
+    my $message1      = shift;#text to go into record
+    my $datestamp = get_date_stamp();
+    $message1 = $datestamp."\n".$message1;
+
+#   #possibly want this line: my $address = shift;# who to email !!!!
+
+    debug_print(5,"\ntest>> $event_type -- $message1 "); #!!!!for testing only:
+
+#   #next line is so that original message is kept
+    my $message2 = "script error:\n\n".$message1;#tack on standard script id to all messages
+
+    if (($event_type == 1)){#normal event logged to activity only
+        if ($errorcount > 0){#if there are any errors, put an *error* at begining of line for inclusion in activity log (so that errors can be noted without explicity accessing the error log)
+            print ACTIVITY_LOG "*errors*\t";
+        }
+        print ACTIVITY_LOG "$message1\n";
+    }
+        if (($event_type == 2)){#logged to error log only
+        print ERROR_LOG "$message1\n";
+    }
+
+    if (($event_type == 3)){#logged to error/activity and email notify !!! email not implemented at this point
+
+        print ERROR_LOG "$message1\n";
+        print ACTIVITY_LOG "*errors*\t";
+        print ACTIVITY_LOG "$message1\n";
+
+            my %mail = (
+                smtp =>'mail2.allenpress.com',
+                Subject =>'PDF renamer errors',
+                To      => 'xinetadmin@allenpress.com',
+                  From    => 'xinetadmin@allenpress.com',
+                  Message => " PDF renamer errors:\n\n$message2\n\n"
+                 );
+            #!!!bypassed for now    sendmail(%mail);
+        }#end if email send needed
+    if (($event_type == 4)){# email notify only, for special case (log files issues) !!! email not implemented at this point
+
+
+            my %mail = (
+                smtp =>'mail2.allenpress.com',
+                Subject =>'PDF renamer errors',
+                To      => 'xinetadmin@allenpress.com',
+                  From    => 'xinetadmin@allenpress.com',
+                  Message => " PDF renamer errors:\n\n$message2\n\n"
+                 );
+                #!!!! bypassed for now sendmail(%mail);
+        }#end if email send needed  #end event gen
+}
+############################################################################################
+
+sub get_date_stamp{
+#==============================================
+#generate today's date
+#the next bit gets the date and formats with leading 0's if necessary,
+   my ($sec,$min,$hour,$mday,$mon,$year,
+             $wday,$yday,$isdst) = localtime time;
+   $year=$year+1900;
+   $mon=$mon+1;
+   if ($mon<10)
+   {
+    $mon="0".$mon;
+   }
+    if ($mday<10)
+   {
+    $mday="0".$mday;
+   }
+#next line ordered by largest to smallest time step, not by any convention
+#my   $todaysdate = $year."\/".$mon."\/".$mday."->".$hour.":".$min.":".$sec;
+
+#my $now = sprintf("%02d\/%02d\/%04d\t%02d:%02d:%02d",$mon,$mday,$year,$hour,$min,$sec);
+my $now = sprintf("%02d%02d%04d%02d%02d%02d",$mon,$mday,$year,$hour,$min,$sec);
+
+return $now;
+#### end the get date section #####
+#==============================================
+}#end get date stamp
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+sub find_type {
+    my $filename = shift; #full file name
+    $filename = lc($filename);
+    if ($filename =~ m/^([-a-z0-9]+)[.](.+)$/){
+        $filename =~ s/^([-a-z0-9]+)[.](.+)$/$2/;
+    }
+    else{#there is no volume number found, so return placeholder of some sort
+        $filename= "BADTYPE";#or some other suitable null value
+    }
+    return $filename;
+}#end sub findtype
+
+sub build_path_with_templates_if_needed {
+#!!!! in the next block, each sub block sh0uld be made contingent on the success of the prior
+#!!! one.  i.e. if you can't create the issue, don't try to create the article
+#____________________
+
+    my $path_root;
+    my $create_tree_flag;
+
+
+    $create_tree_flag = $unix_success;
+    if (exists $configitems{'output_folder_root'}){
+        $path_root = $configitems{'output_folder_root'};
+    }
+
+#FIRST, CREATE/CHECK THE BASE JOURNAL DIRECTORY.  i.e. /raid/Production/a/abot/
+    my $template_destination = $path_root.$jrnl_trunk;
+    if ( -d  $template_destination ) { # Do not attempt to apply template if path exists. 2007-04-04 bscott: kscp may copy INTO existing folder instead of OVER.
+        $create_tree_flag = $unix_success;
+    }
+    else {
+#       my $journal_template = $journal_template;
+        if ( -d $journal_template.$base_context ) { # See if template has needed subfolder.
+            debug_print(6,"dbg06a: Success finding '$journal_template' containing '$base_context'");
+            $create_tree_flag = system("$sys_copy_folder_cmd $journal_template $template_destination");
+        }
+        else {
+            debug_print(6,"dbg06b: Failed to find '$journal_template' containing '$base_context'");
+            $create_tree_flag = $unix_failure;
+        }
+        if ($create_tree_flag != $unix_success){
+            debug_print(5,"dbg06c: Fail $create_tree_flag; cmd: '$sys_copy_file_cmd $journal_template $template_destination'");
+            event_gen(3, "$create_tree_flag aProblem with copying template $journal_template to : $template_destination ");
+        }
+    }
+    if ($create_tree_flag != $unix_success){
+        return $create_tree_flag;
+    }
+    #____________________-
+#NOW, PRESUMING THAT THE PRIOR BLOCK WORKED, CREATE/CHECK THE ISSUE DIRECTORY.  i.e. /raid/Production/a/abot/abot-34-04/
+
+    $template_destination = $template_destination.$base_context.$issue_id_folder;
+    if ( -d  $template_destination ) { # Do not attempt to apply template if path exists. 2007-04-04 bscott: kscp may copy INTO existing folder instead of OVER.
+        $create_tree_flag = $unix_success;
+    }
+    else {
+        #bscott# Need a way to test whether or not article folders are used. If not, then lookahead: if ( -d $issue_template.$ext_context ) { # See if template has needed subfolder.
+        if (-d $issue_template) {
+            debug_print(6,"dbg07a: Success finding '$issue_template'");
+            $create_tree_flag = system("$sys_copy_folder_cmd $issue_template $template_destination");
+        }
+        else {
+            debug_print(6,"dbg07b: Failure finding '$issue_template'");
+            $create_tree_flag = $unix_failure;
+        }
+        if ($create_tree_flag != $unix_success){
+            debug_print(5,"dbg07c: Fail $create_tree_flag; cmd: $sys_copy_folder_cmd $issue_template $template_destination");
+            event_gen(3, "$create_tree_flag bProblem with copying template $issue_template to : $template_destination ");
+        }
+    }
+    if ($create_tree_flag != $unix_success){
+        return $create_tree_flag;
+    }
+    #_____________________
+#NOW, IF THE TWO PRIOR CREATEs WORKED, CREATE/CHECK THE ARTICLE BIT OF THE PATH
+    $template_destination = $template_destination.$article_id_folder;
+    if ( -d  $template_destination ) { # Do not attempt to apply template if path exists. 2007-04-04 bscott: kscp may copy INTO existing folder instead of OVER.
+        $create_tree_flag = $unix_success;
+    }
+    else {
+#               my $article_template = $article_template;
+        if ( -d $article_template.$ext_context ) { # See if template has needed subfolder.
+            debug_print(6,"dbg08a: Success finding '$article_template' containing '$ext_context'");
+            $create_tree_flag = system("$sys_copy_folder_cmd $article_template $template_destination");
+        }
+        else {
+            debug_print(6,"dbg08b: Failure finding '$article_template' containing '$ext_context'");
+            $create_tree_flag = $unix_failure;
+        }
+        if ($create_tree_flag != $unix_success){
+            debug_print(5,"dbg08c: Fail $create_tree_flag; cmd: $sys_copy_folder_cmd $article_template $template_destination");
+            event_gen(3, "$create_tree_flag cProblem with copying template $article_template to : $template_destination ");
+        }
+    }
+    if ($create_tree_flag != $unix_success){
+        return $create_tree_flag;
+    }
+    if ( -d  $template_destination ) {
+        debug_print(5,"dbg08d: OK $create_tree_flag; Built $template_destination.");
+        $create_tree_flag = $unix_success;
+    }
+    else {
+        debug_print(5,"dbg08e: Fail $create_tree_flag; Templates did not build $template_destination.");
+        $create_tree_flag = $unix_failure;
+    }
+    return $create_tree_flag;
+} # build_path_with_templates_if_needed
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+sub detect_revision
+{
+    my %file_data = shift;#pull in record of data
+    my $rev_file_path = construct_rev_file_path($file_data{ap_filename});
+
+    if (-e $rev_file_path){
+        return 1;
+    }
+    else{
+        return 0;
+    }
+
+}
+
+
+
+
+sub read_current_data#read in the data for the current trigger file (and pull from other resources like the file tree
+{
+my $trigger_filename = shift;
+my $filecontents;
+my @values;
+my $value;
+
+#in here, need to:
+
+#open file
+open TRIGGER_FILE, "<$trigger_filename";
+$filecontents = <TRIGGER_FILE>;
+close TRIGGER_FILE;
+##print "triggerfiletest: $trigger_filename \n\n";
+@values = split(/\t/,$filecontents);#tab delimited
+# foreach $value (@values){
+# #print "testvals: $value";
+# }
+#read contents into hash
+$current_job_data{jcode} = $values[0];
+$current_job_data{vol} = $values[1];
+$current_job_data{iss} = $values[2];
+$current_job_data{month} = $values[3];
+$current_job_data{special} = $values[4];
+$current_job_data{ap_num} = $values[5];
+$current_job_data{cust_num} = $values[6];
+$current_job_data{authors} = $values[7];
+$current_job_data{cor_author} = $values[8];
+$current_job_data{beg_pg} = $values[9];
+$current_job_data{end_pg} = $values[10];
+#$current_job_data{} = $values[0];
+
+# foreach $value (@values){
+#   #print "$value \n\n";
+# }
+
+#now some cleanups
+$current_job_data{cor_author} =~ s/^[^-]*?([A-Za-z]+)[ ]*[-].*/$1/;#only return author last name no spaces, no punct. no - whatever
+
+#end cleanups
+
+
+# #print "$current_job_data{jcode} \n";
+# #print "$current_job_data{vol} \n";
+# #print "$current_job_data{iss} \n";
+# #print "$current_job_data{month} \n";
+# #print "$current_job_data{special} \n";
+# #print "$current_job_data{ap_num} \n";
+# #print "$current_job_data{cust_num} \n";
+# #print "$current_job_data{authors} \n";
+# #print "$current_job_data{cor_author} \n";
+# #print "$current_job_data{beg_pg} \n";
+# #print "$current_job_data{end_pg} \n";
+
+
+#derive other info needed (is rev or 1x0 etc)
+
+
+#return the hash???!!!
+
+
+}
+
+sub construct_rev_file_path
+{
+
+}
+
+sub construct_1x0_file_path
+{
+
+}
+
+
+sub find_month
+{
+return $current_job_data{month};
+
+}
+
+sub find_special
+{
+return $current_job_data{special};
+
+}
+sub find_authors
+{
+return $current_job_data{authors};
+
+}
+sub find_corresponding_author_name
+{
+return $current_job_data{cor_author};
+
+}
+sub find_start_page
+{
+return $current_job_data{beg_pg};
+
+}
+sub find_end_page
+{
+return $current_job_data{end_pg};
+
+}
+
+sub find_proprietary_id
+{
+return $current_job_data{cust_num};
+
+
+}
+
+#this is a group of subs to readability-ify the file parseing process for file names
+sub find_four_letter_code {
+return $current_job_data{jcode};
+
+
+#this finds the four letter code from a file name
+#   my $filename = shift; #full file name
+#   $filename = lc($filename);
+#   if ($filename =~ m/^([a-z][a-z][a-z][a-z])/){
+#       $filename =~ s/^([a-z][a-z][a-z][a-z]).*$/$1/;
+#   }
+#   else{#there is no volume number found, so return placeholder of some sort
+#       $filename= "BADCODE";#or some other suitable null value
+#   }
+#   return $filename;
+}#end sub fourlettercode
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+sub find_first_letter {
+    my $filename = shift; #full file name
+    $filename = lc($filename);
+    if ($filename =~ m/^([a-z]).*$/){
+        $filename =~ s/^([a-z]).*$/$1/;
+    }
+    else{#there is no volume number found, so return placeholder of some sort
+        $filename= "BADFIRSTLETTER";#or some other suitable null value
+    }
+    return $filename;
+
+}#end sub findfirstletter
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+sub find_volume {
+my $volume = $current_job_data{vol};
+if (length($volume) < 2){
+$volume = "0".$volume;
+}
+return $volume;
+
+#   my $filename = shift; #full file name
+#   $filename = lc($filename);
+#   #bscott# Consider looping over a list of possible patterns to match.
+#   if ($filename =~ m/^[a-z][a-z][a-z][a-z]-([0-9]+)-.*$/){#if there is an appropriate pattern, get it
+#       $filename =~ s/^[a-z][a-z][a-z][a-z]-([0-9]+)-.*$/$1/;
+#   }
+#   else{#there is no volume number found, so return placeholder of some sort
+#       $filename= "BADVOLNUM";#or some other suitable null value
+#   }
+# #*** note that a similar change should be made to the next few similar subs.
+#   return $filename;
+}#end sub findvolume
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+sub find_issue {
+
+my $issue = $current_job_data{iss};
+if (length($issue) < 2){
+$issue = "0".$issue;
+}
+return $issue;
+#   my $filename = shift; #full file name
+#   $filename = lc($filename);
+#   #bscott# Consider looping over a list of possible patterns to match.
+#   #bscott# BROKEN: issue pattern is too permissive, matches rest of filename.
+#   if ($filename =~ m/^[a-z][a-z][a-z][a-z]-[0-9]+-([0-9]+)($|[^0-9].*$)/){#if there is an appropriate pattern, get it
+#       $filename =~ s/^[a-z][a-z][a-z][a-z]-[0-9]+-([0-9]+)($|[^0-9].*$)/$1/;
+#   }
+#   else{#there is no volume number found, so return placeholder of some sort
+#       $filename= "BADISSUENUM";#or some other suitable null value
+#   }
+#
+#   return $filename;
+}#end sub findissue
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+sub find_article {
+return $current_job_data{ap_num};
+
+#   my $filename = shift; #full file name
+#   $filename = lc($filename);
+#   #bscott# Consider looping over a list of possible patterns to match.
+#   if ($filename =~ m/^[a-z][a-z][a-z][a-z]-[0-9]+-[0-9]+-([0-9]+).*$/){
+#       $filename =~ s/^[a-z][a-z][a-z][a-z]-[0-9]+-[0-9]+-([0-9]+).*$/$1/;
+#   }
+#   else{#there is no volume number found, so return placeholder of some sort
+#       $filename= "BADARTICLENUM";#or some other suitable null value
+#   }
+#   return $filename;
+}#end sub findarticle
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+sub find_file_type
+{
+#for now, just return pdf
+return "pdf";
+
+}
+
+#find xxx paths == one for nas03 opi xinet, and so on.
+sub find_xinet_path
+{
+#these bits may need to gain some complexity to sync up with the dispatcher and/or use a mechanism for
+#acutally using a disptacher and have this code just work from a single input and output folder
+    my $four_letter_code;
+    my $first_letter;
+    my $vol;
+    my $iss;
+    my $art;
+    my $full_path_filename;
+    my $current_file = shift;
+
+    $four_letter_code = find_four_letter_code($current_file);
+    $first_letter = find_first_letter($current_file);
+    $vol = find_volume($current_file);
+    $iss = find_issue($current_file);
+    $art = find_article($current_file);
+#/raid/Production/a/abot/live_jobs/abot-94-09/_proofs/first
+#!!! will have to add some new code when revisions comes on line
+    $full_path_filename = "/raid/Production/".$first_letter."/".$four_letter_code."/live_jobs/".$four_letter_code."-".$vol."-".$iss."/_proofs/first/".$current_file;
+##print "fullinpuatsh: $full_path_filename \n";
+    return $full_path_filename;
+}
+
+
+
+
+#return only the path component (version of prior sub)
+sub find_xinet_path_only
+{
+#these bits may need to gain some complexity to sync up with the dispatcher and/or use a mechanism for
+#acutally using a disptacher and have this code just work from a single input and output folder
+    my $four_letter_code;
+    my $first_letter;
+    my $vol;
+    my $iss;
+    my $art;
+    my $full_path_filename;
+    my $current_file = shift;
+
+    $four_letter_code = find_four_letter_code($current_file);
+    $first_letter = find_first_letter($current_file);
+    $vol = find_volume($current_file);
+    $iss = find_issue($current_file);
+    $art = find_article($current_file);
+#/raid/Production/a/abot/live_jobs/abot-94-09/_proofs/first
+#!!! will have to add some new code when revisions comes on line
+    $full_path_filename = "/raid/Production/".$first_letter."/".$four_letter_code."/live_jobs/".$four_letter_code."-".$vol."-".$iss."/_proofs/first/";
+##print "fullinpuatsh: $full_path_filename \n";
+    return $full_path_filename;
+}
+
+
+sub find_first_letter {
+    my $filename = shift; #full file name
+    $filename = lc($filename);
+    if ($filename =~ m/^([a-z]).*$/){
+        $filename =~ s/^([a-z]).*$/$1/;
+    }
+    else{#there is no volume number found, so return placeholder of some sort
+        $filename= "BADFIRSTLETTER";#or some other suitable null value
+    }
+    return $filename;
+
+}#end sub findfirstletter
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#below here is a repository of either alternate versions
+#or code that is just not used anymore
+#but all of which is left here for reference
+#or possible later use
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# sub find_volume {
+#   my $filename = shift; #full file name
+#   $filename = lc($filename);
+#   #bscott# Consider looping over a list of possible patterns to match.
+#   if ($filename =~ m/^[a-z][a-z][a-z][a-z]-([0-9]+)-.*$/){#if there is an appropriate pattern, get it
+#       $filename =~ s/^[a-z][a-z][a-z][a-z]-([0-9]+)-.*$/$1/;
+#   }
+#   else{#there is no volume number found, so return placeholder of some sort
+#       $filename= "BADVOLNUM";#or some other suitable null value
+#   }
+# #*** note that a similar change should be made to the next few similar subs.
+#   return $filename;
+# }#end sub findvolume
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# sub find_issue {
+#   my $filename = shift; #full file name
+#   $filename = lc($filename);
+#   #bscott# Consider looping over a list of possible patterns to match.
+#   #bscott# BROKEN: issue pattern is too permissive, matches rest of filename.
+#   if ($filename =~ m/^[a-z][a-z][a-z][a-z]-[0-9]+-([0-9]+)($|[^0-9].*$)/){#if there is an appropriate pattern, get it
+#       $filename =~ s/^[a-z][a-z][a-z][a-z]-[0-9]+-([0-9]+)($|[^0-9].*$)/$1/;
+#   }
+#   else{#there is no volume number found, so return placeholder of some sort
+#       $filename= "BADISSUENUM";#or some other suitable null value
+#   }
+#
+#   return $filename;
+# }#end sub findissue
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# sub find_article {
+#   my $filename = shift; #full file name
+#   $filename = lc($filename);
+#   #bscott# Consider looping over a list of possible patterns to match.
+#   if ($filename =~ m/^[a-z][a-z][a-z][a-z]-[0-9]+-[0-9]+-([0-9]+).*$/){
+#       $filename =~ s/^[a-z][a-z][a-z][a-z]-[0-9]+-[0-9]+-([0-9]+).*$/$1/;
+#   }
+#   else{#there is no volume number found, so return placeholder of some sort
+#       $filename= "BADARTICLENUM";#or some other suitable null value
+#   }
+#   return $filename;
+# }#end sub findarticle
+
+
+
+# sub find_nas03_path
+# {
+# #these bits may need to gain some complexity to sync up with the dispatcher and/or use a mechanism for
+# #acutally using a disptacher and have this code just work from a single input and output folder
+#   my $four_letter_code;
+#   my $first_letter;
+#   my $vol;
+#   my $iss;
+#   my $art;
+#   my $full_path_filename;
+#   my $current_file = shift;
+#
+#   $four_letter_code = find_four_letter_code($current_file);
+#   $first_letter = find_first_letter($current_file);
+#   $vol = find_volume($current_file);
+#   $iss = find_issue($current_file);
+#   $art = find_article($current_file);
+# #/raid/Production/a/abot/live_jobs/abot-94-09/_proofs/first
+# #!!! will have to add some new code when revisions comes on line
+#   $full_path_filename = "/network_links/nas03/".$four_letter_code.$vol.$iss."/".$current_file;
+# ##print "fullinpuatsh: $full_path_filename \n";
+#   return $full_path_filename;
+# }
+
+
+
+#return only the path component (version of prior sub)
+# sub find_nas03_path_only
+# {
+# #these bits may need to gain some complexity to sync up with the dispatcher and/or use a mechanism for
+# #acutally using a disptacher and have this code just work from a single input and output folder
+#   my $four_letter_code;
+#   my $first_letter;
+#   my $vol;
+#   my $iss;
+#   my $art;
+#   my $full_path_filename;
+#   my $current_file = shift;
+#
+#   $four_letter_code = find_four_letter_code($current_file);
+#   $first_letter = find_first_letter($current_file);
+#   $vol = find_volume($current_file);
+#   $iss = find_issue($current_file);
+#   $art = find_article($current_file);
+# #/raid/Production/a/abot/live_jobs/abot-94-09/_proofs/first
+# #!!! will have to add some new code when revisions comes on line
+#   $full_path_filename = "/network_links/nas03/".$four_letter_code.$vol.$iss."/";
+# ##print "fullinpuatsh: $full_path_filename \n";
+#   return $full_path_filename;
+# }
+
+# #this is a group of subs to readability-ify the file parseing process for file names
+# sub find_four_letter_code {
+# #this finds the four letter code from a file name
+#   my $filename = shift; #full file name
+#   $filename = lc($filename);
+# #print "test2 $filename\n";
+#   if ($filename =~ m/^([a-z][a-z][a-z][a-z])/){
+#       $filename =~ s/^([a-z][a-z][a-z][a-z]).*$/$1/;
+#   }
+#   else{#there is no volume number found, so return placeholder of some sort
+#       $filename= "BADCODE";#or some other suitable null value
+#   }
+#   return $filename;
+# }#end sub fourlettercode
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+
+#???!!! below here is the original full spreadsheet info
+# 9.19.07
+
+# e-Proof Distribution Specifications
+#
+# Default Naming Conventions
+#
+# 3B2
+# pdpa-10-01-02_11..15.pdf
+# pdpa-10-01-02q_1..1.pdf
+#
+# Charlesworth
+# limn-52-01-01.pdf
+#
+# Penta/DTPro
+# coas_23_301_1_33.pdf
+# coas_01sn.pdf
+#
+#
+# 3B2 Custom PDF naming jobs = 25
+# CW Custom PDF naming jobs = 12
+# D&L Custom PDF naming jobs = 7
+# Penta Custom PDF naming jobs = 3
+#
+#
+# Total custom naming conventions = 47
+# Total e-Proof Distribution jobs = 162
+#
+#
+# Job   Acc. Mgnt.  Naming Conv.    Watermark   Security    Composition
+# AARE  AM  Default X       CW
+# ABOT  AM  Replace pg range with Corresponding Author          3B2
+# ADDI  ME  Default         CW
+# AJCS* ME  Replace pg range with 1st Author            3B2
+# AJMR  AM  1XO 1st Author/Rev-Rev Stage            Penta
+# ALIS  AM  Default         Penta
+# AMBI  ACG Default         3B2
+# AMFJ  AM  Default         CW
+# AMNA  AM  Default         CW
+# AMNB  AM  Default         CW
+# AMNH  AM  Default         Penta
+# AMNL  AM  Default         Penta
+# ANDR  ME  Default         CW
+# ANGL  AM  Default/Serv-U          Penta
+# ANHC* ME  Custom          CW
+# ANPR  ACG Default         CW
+# Job   Acc. Mgnt.  Naming Conv.    Watermark   Security    Composition
+# AQAH* AM  Custom          3B2
+# ARAC  AM  Default         CW
+# ARPA  ME  Default         Penta
+# ASTC  ME  Default         Penta
+# ATTR  ME  Default         Penta
+# AVDI  ME  Default         CW
+# AVMS  ME  Default         CW
+# BIOF  ACG Default         D+L
+# BIRE* AM  Custom          3B2
+# BMIT  AM  Default         D+L
+# BRYO  AM  Default         CW
+# BVRV  AM  Replace pg range with 1st Author            3B2
+# CAST  AM  Default         CW
+# CAVE      Default         CW
+# CCAB  ACG Replace pg range with 1st Author            3B2
+# CEST  AM  Replace pg range with Corresponding Author          Penta
+# COAS  ACG Default         Penta
+# COLE  AM  Default         CW
+# COND  AM  Default         CW
+# COPA  AM  Default         3B2
+# COPE  AM  Default         CW
+# CPCJ  ACG Default         CW
+# CUGE  AM  Default         CW
+# DOLN  AM  Default         D+L
+# DISS  AM  Custom          CW
+# DTCO* ME  Custom          CW
+# EAIN* AM  Default/Serv-U          CW
+# ECAP  AM  Default/Serv-U          3B2
+# ECOL  AM  Default/Serv-U          3B2
+# EEGO  AM  Replace pg range with 1st Author            CW
+# EEGT  AM  Default         3B2
+# EMON  AM  Default/Serv-U          3B2
+# ENTC  ACG Default         Penta
+# ENTH  AM  Default         CW
+# ESTU* AM  Add page range-all stages           CW
+# ETBI  AM  Default         CW
+# ETHN  AM  Default X-every page        CW
+# EXBM  ME  1XO-remove pg range/Rev-keep pg range           3B2
+# FIMA* AM  Custom          3B2
+# FITR* AM  Custom          3B2
+# FLSC  AM  Default         CW
+# FOOD  ME  Default         Penta
+# FORA  AM  Default         CW
+# GEOS  AM  Default         Penta
+# GRNA* AM  Custom  X-1st pages X   3B2
+# GRNB* AM  Custom  X-1st pages X   3B2
+# GRNT* AM  Custom  X-1st pages X   3B2
+# Job   Acc. Mgnt.  Naming Conv.    Watermark   Security    Composition
+# HEPR  AM  Default         CW
+# HERP  AM  Default         CW
+# HMON  AM  Default         CW
+# HPET  AM  Default         CW
+# HYRE  AM  Default         CW
+# IAAS  AM  Default         CW
+# IBMR  AM  Custom          3B2
+# IBMS  AM  Custom          3B2
+# IEAM  ACG Default         3B2
+# INQR  AM  Default         CW
+# INSM  AM  Replace pg range with 1st Author            CW
+# IPSM  ACG Default         CW
+# JAAE  AM  Default         CW
+# JEAB  AM  Default         CW
+# JNBS  AM  Default         3B2
+# JRMT  AM  Default         Blue Heron
+# JVIM  ME  Default         CW
+# JWDI  AM  Default         CW
+# KIRT  AM  Default         CW
+# LECO  AM  Default         CW
+# LIMN  AM  Default         CW
+# MADR  AM  Default         CW
+# MAMM  ACG Default         3B2
+# MERE* AM  1XO 1st Author/Rev-Rev Stage            Penta
+# MICR* ME  Custom          CW
+# MLAB* AM  Custom          Penta
+# MMSP  ACG Default         Penta
+# MOBT  AM  Replace pg range with 1st Author/Rev-Rev Stage          CW
+# MTPS  AM  Default         Penta
+# MUVO  ME  Default         3B2
+# MYCO  AM  Default/Serv-U          CW
+# NAJA* AM  Custom          3B2
+# NDST  AM  Default         CW
+# NOVI  AM  Default         CW
+# NOVO* AM  Replace pg range with 1st Author            CW
+# NWNT  AM  Default         Penta
+# NWTS  AM  Default         Penta
+# OCHS  ME  Default         CW
+# ORIM  ACG Default         3B2
+# PACS  ME  Custom          CW
+# PALO  AM  Default         CW
+# PAMB  AM  Default         CW
+# PANP  AM  Default         CW
+# PARA  AM  Default         Penta
+# PBIO  AM  Default         Penta
+# PBSW  AM  Default         CW
+# PDPA  ACG Default         3B2
+# PHOT  AM  Default         3B2
+# PHYA  ACG Default         CW
+#
+# Job   Acc. Mgnt.  Naming Conv.    Watermark   Security    Composition
+# PLBI  AM  Replace pg range with Corresponding Author          3B2/D+L
+# PLCB  AM  Replace pg range with Corresponding Author          3B2/D+L
+# PLCT  AM  Replace pg range with Corresponding Author          3B2/D+L
+# PLEO  AM  Default         Penta
+# PLEM  AM  Default         Penta
+# PLGE  AM  Replace pg range with Corresponding Author          3B2/D+L
+# PLME  AM  Replace pg range with Corresponding Author          3B2/D+L
+# PLPA  AM  Replace pg range with Corresponding Author          3B2/D+L
+# PNUT  AM  Default         CW
+# POLI  AM  Default         3B2
+# PPPJ  AM  Default         CW
+# RALA  ACG Default         3B2
+# RAMA  ACG Default         CW
+# RAPT  AM  Default         CW
+# RARE  AM  Default         Penta
+# RSOC  AM  Replace pg range with 1st Author            CW
+# SARC  AM  Default         CW
+# SBOT  AM  Replace pg range with 1st Author            CW
+# SCEX  AM  Default         3B2
+# SCNU  ACG Default         Penta
+# SCRE  ACG Default         Penta
+# SEDP  AM  Default         CW
+# SELB  AM  Default         Penta
+# SNNE  AM  Default         D+L
+# SOEC  ME  Default         CW
+# SPCM  ME  Default         3B2
+# STCO  ACG Default         D+L
+# SWNA  AM  Default         CW
+# TBOT  AM  Default         CW
+# TESE  AM  Default         CW
+# TRPS  AM  Default         CW
+# TURT  ACG Replace pg range with 1st Author-all stages         D+L
+# URSU  AM  Default         3B2
+# VCLP  AM  Replace pg range with 1st Author-all stages         3B2
+# VELI  AM  Default         CW
+# VETD  AM  Default         CW
+# VETP  ME  Default         CW
+# WAER* AM  Custom          3B2
+# WBIO  AM  Default         CW
+# WEES  ACG Default         CW
+# WEME  AM  Default         Penta
+# WENT  AM  Default         CW
+# WETE  ACG Default         CW
+# WETL  AM  Default         CW
+# WILD  ACG Default/Remove page ranges          3B2
+# WILS  AM  Default         Penta
+# WMON  ACG Default/Remove page ranges          3B2
+# ZAMD  AM  Default         Penta
+
+
+#############################end big journal case block#############################################################
+####################################################################################################################
+#       $output_filename = "DS-".$date_stamp."-FL-".$first_letter."-J-".$journal_code."-CC-".$customer_file_id."-AN-".$author_name."-V-".$volume_number."-I-".$issue_number."-A-".$article_number."*.".$file_type;
+        ##print " current jcode:-$journal_code-  test \n";
+

@@ -1,0 +1,68 @@
+<!-- use et al. in in-text references - name counts -->
+
+<article dtd-version="3.0" xmlns:mml="http://www.w3.org/1998/Math/MathML" xmlns:xlink="http://www.w3.org/1999/xlink">
+	<front><journal-meta><journal-id journal-id-type="publisher"></journal-id><journal-title-group><journal-title>Test Journal</journal-title></journal-title-group><publisher><publisher-name>Allen Press, Inc.</publisher-name></publisher></journal-meta><article-meta><article-id pub-id-type="sici">test-01-01-01</article-id><article-categories><subj-group subj-group-type="Article Type"><subject>Research Article</subject></subj-group></article-categories><title-group><article-title>This is the Title of the Test Article</article-title><alt-title alt-title-type="runhead">Test Test Test</alt-title></title-group><contrib-group><contrib contrib-type="author"><name content-type="Given-Sur"><surname>Henderson</surname><given-names>Joe<x> </x></given-names></name><xref rid="n102" ref-type="fn"/></contrib><x> and </x><contrib contrib-type="author"><name content-type="Given-Sur"><surname>Stuart</surname><given-names>Ian<x> </x></given-names></name><xref rid="n102" ref-type="fn"/></contrib></contrib-group><author-notes><fn id="n102" fn-type="current-aff"><p><italic>Front footnote for author details.</italic>.</p></fn></author-notes><pub-date pub-type="ppub"><month>Month</month><year>2013</year></pub-date><volume>00</volume><issue>00</issue><fpage>001</fpage><lpage>999</lpage><permissions><copyright-statement>Allen Press, Inc.</copyright-statement><copyright-year>2013</copyright-year></permissions><abstract><title>ABSTRACT</title><x>: </x><p>This is the abstract. There will be no xref callouts here</p></abstract></article-meta></front>
+	<body>
+		<sec id="s1">
+			<title>PLAIN</title>
+			<p>This is a regular emtpy paragraph in a body section.</p>
+			<p>This callout has 8 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore8a">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 7 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore7a">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 6 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore6a">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 5 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore5a">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 4 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore4a">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 3 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore3a">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 2 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore2a">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 1 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore1a">Dumbledore 2000</xref>.</p>
+		</sec>
+		<sec id="s2">
+			<title>WITH &ldquo;AND&rdquo;</title>
+			<p>This is a regular emtpy paragraph in a body section.</p>
+			<p>This callout has 8 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore8b">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 7 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore7b">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 6 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore6b">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 5 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore5b">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 4 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore4b">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 3 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore3b">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 2 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore2b">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 2 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore1b">Dumbledore et al. 2000</xref>.</p>
+		</sec>
+		<sec id="s3">
+			<title>WITH &ldquo;&amp;AMP;&rdquo;</title>
+			<p>This is a regular emtpy paragraph in a body section.</p>
+			<p>This callout has 8 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore8c">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 7 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore7c">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 6 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore6c">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 5 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore5c">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 4 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore4c">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 3 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore3c">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 2 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore2c">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 2 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore1c">Dumbledore et al. 2000</xref>.</p>
+		</sec>
+		<sec id="s4">
+			<title>WITH &ldquo;, et al.&rdquo;</title>
+			<p>This is a regular emtpy paragraph in a body section.</p>
+			<p>This callout has 8 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore8d">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 7 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore7d">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 6 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore6d">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 5 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore5d">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 4 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore4d">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 3 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore3d">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 2 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore2d">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 1 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore1d">Dumbledore et al. 2000</xref>.</p>
+		</sec>
+		<sec id="s5">
+			<title>WITH &ldquo;et al.&rdquo;</title>
+			<p>This is a regular emtpy paragraph in a body section.</p>
+			<p>This callout has 8 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore8e">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 7 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore7e">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 6 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore6e">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 5 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore5e">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 4 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore4e">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 3 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore3e">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 2 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore2e">Dumbledore et al. 2000</xref>.</p>
+			<p>This callout has 1 name: <xref ref-type="bibr" rid="test-01-01-01-Dumbledore1e">Dumbledore et al. 2000</xref>.</p>
+		</sec>
+	</body>
+	<back><ref-list><title>REFERENCES</title></ref-list></back>
+</article>
