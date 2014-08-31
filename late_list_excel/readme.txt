@@ -1,0 +1,1 @@
+This MS Excel module takes exports from another system (an old Excel file type), extracts the data, and rearranges it into a filtered spreadsheet.  It also builds a cover page with production statistics.  It's designed to be used manualy, multiple times per day.
