@@ -1,0 +1,57 @@
+html{
+
+}
+
+canvas{
+	background:#FFFFFF;
+	border:1px solid #000000;
+}
+
+
+td{
+	border: 1px solid black;
+}
+
+.theBody{
+	background:#DDDDDD;
+}
+
+.mainBodyContainer{
+	width: 100%;
+	
+}
+
+/* leftmost column */
+.canvasContainer{
+	padding: 5px;
+	margin: 5px;
+	width: 60%;
+	min-width:800px !important;
+	position:relative;
+	float:left;
+	
+}
+.controlContainer_canvas{ }
+
+/* middle column */
+.detailsContainer{
+	padding: 2px;
+	margin: 2px;
+	width: 18%;
+	position:relative;
+	float:left;
+}
+
+/* rightmost column */
+.navThingyWrapper{
+	padding: 2px;
+	margin: 2px;
+	width: 18%;
+	position:relative;
+	float:left;
+}
+.controlContainer_page{ }
+.logContainer{
+	border:solid;
+	background:white;
+}

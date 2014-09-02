@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<!-- basics -->
+		<meta charset="utf-8">
+		<title>Test Page</title>
+		<meta name="description" content="Testing Things">
+		<meta name="author" content="Joe Henderson">
+
+		<!-- some icons -->
+		<link rel="shortcut icon" href="./images/favicon.ico">
+
+		<!-- finally a style sheet -->
+		<link rel="stylesheet" href="./styles/reset-plus.css?v=1.0">
+		<link rel="stylesheet" href="./styles/myStyle.css?v=1.0">
+
+	</head>
+	<body class="theBody">
+		<!-- just in case --><noscript><p>Y U no JavaScript?!</p></noscript>
+
+		<div id="mainBodyContainer" class="mainBodyContainer">
+
+			<div class="canvasContainer">
+				<canvas id="myCanvas" width="750" height="300"></canvas>
+				<div class="controlContainer_canvas">
+					<button onClick="moarFaster()">faster</button>
+					<button onClick="moarSlower()">slower</button>
+					<button onClick="switchDirection()">switch</button>
+					<button onClick="doJump()">jump</button>
+					<button onClick="switchDirection()">new</button>
+				</div>
+			</div>
+
+
+			<div class="detailsContainer">
+				<label>FPS = </label><output id="out_FPS">0</output><br />
+				X = <output id="out_x">0</output><br />
+				Y = <output id="out_y">0</output><br />
+				yMax = <output id="out_yMax">0</output><br />
+				isOn = <output id="out_isOn">0</output><br />
+				speed = <output id="out_speed">0</output><br />
+				refreshRate = <output id="out_refreshRate">0</output><br />
+				goDown = <output id="out_goDown">0</output><br />
+				isOnY = <output id="out_isOnY">0</output><br />
+				jumpSpeed = <output id="out_jumpSpeed">0</output><br />
+				jumpSpeedMod = <output id="out_jumpSpeedMod">0</output><br />
+			</div>
+
+
+			<div class="navThingyWrapper">
+				<div class="controlContainer_page">
+					<button onClick="startCanvas()">Start</button>
+					<button onClick="stopCanvas()">Stop</button>
+					<button onClick="listenClosely()">listen closely</button>
+					<button onClick="listenPartially()">listen partially</button>
+					<button onClick="stopListening()">stop listening</button>
+				</div>
+
+				<div id="log" class="logContainer"></div>
+			</div>
+
+
+
+		</div>
+
+		<script src="./scripts/myScript.js"></script>
+		<script src="./scripts/pageHandling.js"></script>
+		<script src="./scripts/listenClosely.js"></script>
+	</body>
+</html>
