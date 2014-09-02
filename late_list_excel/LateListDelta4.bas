@@ -2,6 +2,7 @@ Attribute VB_Name = "LateListDelta4"
 Public myRunData(8, 1) As String
 
 ' ############## Need to rework this so that it uses database connection instead of importing spreadsheets
+' ############## Need to rework this so that it uses class objects intead of global array for run data
 
 Public Sub LateListStartup()
     
@@ -111,8 +112,8 @@ Function getDefaultRunData() As Boolean
     Dim dropoffLocation As String ' where to deposit late list by default
     pickupLocation = Environ("UserProfile") & "\Desktop\"
     dropoffLocation = pickupLocation
-    'pickupLocation = "\\Hr-s1\CMS\Core Team\Metric_Generation\in\"
-    'dropoffLocation = "\\Hr-s1\CMS\Core Team\Metric_Generation\out\Late_List\"
+    'pickupLocation = "\\Metric_Generation\in\"
+    'dropoffLocation = "\\Metric_Generation\out\Late_List\"
 
     ' set default data
     ' this array will contain keys in column 0 and values in column 1
@@ -219,6 +220,7 @@ abortStartup:
     result = BottomOfFunction()
 
 End Function
+
 Function validateRunData() As Boolean
     
     result = topOfFunction("Validating RunData...")
@@ -279,6 +281,7 @@ Function validateRunData() As Boolean
     result = BottomOfFunction()
 
 End Function
+
 Function checkMyRunData() As Boolean
     
     result = topOfFunction("Showing RunData...")
@@ -335,6 +338,7 @@ Function importParadoxExports() As Boolean
     result = BottomOfFunction()
 
 End Function
+
 Function ReduceSize2()
 
     'Delete non-null values from empty rows and columns in 1XO tab
@@ -374,10 +378,6 @@ Function ReduceSize2()
     Range("A1").Select
 
 End Function
-
-
-
-
 
 Function labelImports() As Boolean
 
@@ -638,6 +638,7 @@ Function formatImports() As Boolean
     result = BottomOfFunction()
 
 End Function
+
 Function buildOverview() As Boolean
 
     result = topOfFunction("Building Overview Sheet...")
@@ -751,6 +752,7 @@ Function buildOverview() As Boolean
     result = BottomOfFunction()
 
 End Function
+
 Function generateNumbers()
 
     result = topOfFunction("Generating Numbers...")
@@ -843,6 +845,7 @@ Function saveLateList() As Boolean
     result = BottomOfFunction()
 
 End Function
+
 Function topOfFunction(Optional myStatusString As String) As Boolean
     
     Application.DisplayAlerts = False
@@ -864,6 +867,7 @@ Function topOfFunction(Optional myStatusString As String) As Boolean
     topOfFunction = True
 
 End Function
+
 Function BottomOfFunction() As Boolean
     
     
@@ -983,6 +987,7 @@ Sub testLateListFunctions()
 
 
 End Sub
+
 Function ConvertToLetter(iCol As Integer) As String
    Dim iAlpha As Integer
    Dim iRemainder As Integer

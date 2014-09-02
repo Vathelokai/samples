@@ -1,0 +1,12 @@
+This repository stores a collection of samples.
+ReadMe files in subfolders have details.
+
+Overview:
+AP-PDF-Renamer_perl                ... monitors a folder and renames files
+AP-Style-Modules-Rule10695_perl    ... edits content of xml document
+SQL                                ... creates a view
+SRM_splitter_excel                 ... macro to split export into many reports
+business_day_functions             ... vba and js function to find bus. day
+db_logger_access                   ... module to log functions and subs
+late_list_excel                    ... module to generate report
+test_canvas_javascript             ... experiment with canvas
